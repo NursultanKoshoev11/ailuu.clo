@@ -1,0 +1,175 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#eee8df">
+  <meta name="description" content="AILUU.CLO — современная скромная женская одежда.">
+  <title>AILUU.CLO — одежда с достоинством</title>
+  <link rel="icon" href="/logo.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+  <div class="announcement" id="announcement">Доставка по Бишкеку и регионам Кыргызстана</div>
+
+  <header class="header">
+    <a class="brand" href="#top" aria-label="AILUU.CLO — на главную">
+      <img src="/logo.svg" alt="" width="42" height="42">
+      <span id="brandName">AILUU.CLO</span>
+    </a>
+    <nav class="nav" aria-label="Основная навигация">
+      <a href="#catalog">Каталог</a>
+      <a href="#about">О бренде</a>
+      <a href="#delivery">Доставка</a>
+    </nav>
+    <button class="cart-button" id="openCart" type="button" aria-label="Открыть корзину">
+      Корзина <span id="cartCount">0</span>
+    </button>
+  </header>
+
+  <main id="top">
+    <section class="hero">
+      <div class="hero-pattern" aria-hidden="true"></div>
+      <div class="hero-copy reveal">
+        <p class="eyebrow" id="eyebrow">Скромность в каждой детали</p>
+        <h1 id="headline">Одежда, в которой спокойно быть собой</h1>
+        <p class="hero-text" id="subheadline">Лаконичные образы для женщин, выбирающих элегантность, комфорт и сдержанность.</p>
+        <div class="hero-actions">
+          <a class="button button-primary" href="#catalog">Смотреть коллекцию</a>
+          <a class="text-link" id="instagramLink" href="https://www.instagram.com/ailuu.clo/" target="_blank" rel="noreferrer">Instagram ↗</a>
+        </div>
+      </div>
+      <div class="hero-art reveal" aria-label="Декоративная композиция">
+        <div class="arch arch-back"></div>
+        <div class="arch arch-front">
+          <div class="monogram">A</div>
+          <span>AILUU</span>
+          <small>modest wear</small>
+        </div>
+        <div class="orb orb-one"></div>
+        <div class="orb orb-two"></div>
+      </div>
+    </section>
+
+    <section class="benefits" aria-label="Преимущества">
+      <article><span>01</span><div><strong>Закрытый крой</strong><p>Продуманные свободные силуэты</p></div></article>
+      <article><span>02</span><div><strong>Спокойная палитра</strong><p>Цвета, которые легко сочетать</p></div></article>
+      <article><span>03</span><div><strong>Личный сервис</strong><p>Поможем с размером и образом</p></div></article>
+    </section>
+
+    <section class="catalog section" id="catalog">
+      <div class="section-heading reveal">
+        <div>
+          <p class="eyebrow">Выберите свой образ</p>
+          <h2>Коллекция AILUU</h2>
+        </div>
+        <p>Актуальное наличие обновляется владельцем магазина через Telegram.</p>
+      </div>
+      <div class="filters" id="filters" aria-label="Фильтры каталога"></div>
+      <div class="product-grid" id="productGrid" aria-live="polite"></div>
+      <div class="empty-state" id="emptyState" hidden>
+        <span>✦</span>
+        <h3>В этой категории пока нет товаров</h3>
+        <p>Попробуйте выбрать другую категорию.</p>
+      </div>
+    </section>
+
+    <section class="quote-section section reveal">
+      <p>«Красота становится особенной, когда в ней есть спокойствие и достоинство»</p>
+      <span>AILUU.CLO</span>
+    </section>
+
+    <section class="about section" id="about">
+      <div class="about-visual reveal">
+        <div class="fabric-card fabric-one"></div>
+        <div class="fabric-card fabric-two"></div>
+        <div class="about-seal">A<br><small>est. 2026</small></div>
+      </div>
+      <div class="about-copy reveal">
+        <p class="eyebrow">Наша философия</p>
+        <h2 id="aboutTitle">Создано с уважением к вашим ценностям</h2>
+        <p id="aboutText">AILUU.CLO объединяет современный крой, закрытые силуэты и спокойную палитру. Мы подбираем вещи, которые легко сочетать и удобно носить каждый день.</p>
+        <a class="text-link" id="aboutInstagram" href="https://www.instagram.com/ailuu.clo/" target="_blank" rel="noreferrer">Следить за новинками в Instagram ↗</a>
+      </div>
+    </section>
+
+    <section class="delivery section" id="delivery">
+      <div class="delivery-card reveal">
+        <p class="eyebrow">Как заказать</p>
+        <h2>Три простых шага</h2>
+        <ol>
+          <li><span>1</span><div><strong>Добавьте товары</strong><p>Выберите цвет, размер и количество.</p></div></li>
+          <li><span>2</span><div><strong>Оставьте контакты</strong><p>Мы получим заказ в Telegram и свяжемся с вами.</p></div></li>
+          <li><span>3</span><div><strong>Подтвердите доставку</strong><p id="deliveryText">Доставка рассчитывается после подтверждения заказа.</p></div></li>
+        </ol>
+      </div>
+      <div class="delivery-note reveal">
+        <div class="geometric-mark">✦</div>
+        <h3>Нужна помощь с выбором?</h3>
+        <p>Напишите нам — подскажем размер, оттенок и подходящее сочетание.</p>
+        <div class="contact-actions" id="contactActions"></div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="footer">
+    <div class="brand footer-brand"><img src="/logo.svg" alt="" width="36" height="36"><span>AILUU.CLO</span></div>
+    <p>Современная скромная одежда · Бишкек, Кыргызстан</p>
+    <a id="footerInstagram" href="https://www.instagram.com/ailuu.clo/" target="_blank" rel="noreferrer">Instagram</a>
+  </footer>
+
+  <div class="modal" id="productModal" hidden>
+    <div class="modal-backdrop" data-close-modal></div>
+    <article class="product-modal" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
+      <button class="icon-button modal-close" type="button" data-close-modal aria-label="Закрыть">×</button>
+      <div class="modal-image" id="modalImage"></div>
+      <div class="modal-content">
+        <p class="eyebrow" id="modalCategory"></p>
+        <h2 id="modalTitle"></h2>
+        <div class="modal-price" id="modalPrice"></div>
+        <p id="modalDescription"></p>
+        <div class="option-group" id="sizeGroup"></div>
+        <div class="option-group" id="colorGroup"></div>
+        <div class="quantity-row">
+          <span>Количество</span>
+          <div class="quantity-control"><button type="button" id="qtyMinus">−</button><span id="qtyValue">1</span><button type="button" id="qtyPlus">+</button></div>
+        </div>
+        <button class="button button-primary button-wide" id="addToCart" type="button">Добавить в корзину</button>
+      </div>
+    </article>
+  </div>
+
+  <aside class="cart-drawer" id="cartDrawer" aria-hidden="true">
+    <div class="cart-backdrop" id="cartBackdrop"></div>
+    <div class="cart-panel">
+      <div class="cart-header"><div><p class="eyebrow">Ваш выбор</p><h2>Корзина</h2></div><button class="icon-button" id="closeCart" type="button" aria-label="Закрыть">×</button></div>
+      <div class="cart-items" id="cartItems"></div>
+      <div class="cart-empty" id="cartEmpty"><span>✦</span><p>Корзина пока пуста</p></div>
+      <div class="cart-footer" id="cartFooter" hidden>
+        <div class="cart-total"><span>Итого</span><strong id="cartTotal">0 сом</strong></div>
+        <button class="button button-primary button-wide" id="checkoutButton" type="button">Оформить заказ</button>
+      </div>
+    </div>
+  </aside>
+
+  <div class="modal" id="checkoutModal" hidden>
+    <div class="modal-backdrop" data-close-checkout></div>
+    <form class="checkout-modal" id="checkoutForm">
+      <button class="icon-button modal-close" type="button" data-close-checkout aria-label="Закрыть">×</button>
+      <p class="eyebrow">Последний шаг</p>
+      <h2>Оформление заказа</h2>
+      <p>После отправки продавец получит заказ в Telegram и свяжется с вами.</p>
+      <label>Ваше имя<input name="name" autocomplete="name" maxlength="120" required></label>
+      <label>Телефон<input name="phone" type="tel" autocomplete="tel" maxlength="50" placeholder="+996 ..." required></label>
+      <label>Адрес доставки<input name="address" autocomplete="street-address" maxlength="300"></label>
+      <label>Комментарий<textarea name="comment" rows="3" maxlength="500" placeholder="Удобное время, ориентир и другое"></textarea></label>
+      <label class="honeypot" aria-hidden="true">Сайт<input name="website" tabindex="-1" autocomplete="off"></label>
+      <button class="button button-primary button-wide" type="submit" id="submitOrder">Отправить заказ</button>
+      <p class="form-status" id="formStatus" role="status"></p>
+    </form>
+  </div>
+
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+  <script src="/app.js" defer></script>
+</body>
+</html>
