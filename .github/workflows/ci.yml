@@ -46,15 +46,18 @@ jobs:
         with:
           node-version: 22
       - run: npm install --ignore-scripts --no-audit --no-fund
-      - name: Commit generated lockfile once
+      - name: Publish generated lockfile once
         if: github.ref_name == 'lockfile-hardening' || github.head_ref == 'lockfile-hardening'
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           if ! git ls-files --error-unmatch package-lock.json >/dev/null 2>&1; then
-            git config user.name github-actions[bot]
-            git config user.email 41898282+github-actions[bot]@users.noreply.github.com
-            git add package-lock.json
-            git commit -m "chore: add npm lockfile"
-            git push origin HEAD:lockfile-hardening
+            jq -n \
+              --arg message "chore: add npm lockfile" \
+              --arg content "$(base64 -w0 package-lock.json)" \
+              --arg branch "lockfile-hardening" \
+              '{message:$message,content:$content,branch:$branch}' > /tmp/lockfile.json
+            gh api --method PUT "repos/${GITHUB_REPOSITORY}/contents/package-lock.json" --input /tmp/lockfile.json
           fi
       - run: npm run check
       - run: npm test
