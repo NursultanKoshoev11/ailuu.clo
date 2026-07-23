@@ -6,7 +6,7 @@ on:
   pull_request:
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   test:
@@ -40,16 +40,22 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event_name == 'pull_request' && github.head_ref || github.ref_name }}
       - uses: actions/setup-node@v4
         with:
           node-version: 22
       - run: npm install --ignore-scripts --no-audit --no-fund
-      - name: Upload generated lockfile
-        uses: actions/upload-artifact@v4
-        with:
-          name: npm-lockfile
-          path: package-lock.json
-          retention-days: 1
+      - name: Commit generated lockfile once
+        if: github.ref_name == 'lockfile-hardening' || github.head_ref == 'lockfile-hardening'
+        run: |
+          if ! git ls-files --error-unmatch package-lock.json >/dev/null 2>&1; then
+            git config user.name github-actions[bot]
+            git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+            git add package-lock.json
+            git commit -m "chore: add npm lockfile"
+            git push origin HEAD:lockfile-hardening
+          fi
       - run: npm run check
       - run: npm test
       - run: npm run migrate
