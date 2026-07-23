@@ -70,7 +70,7 @@ async function buildApp({ telegram }) {
     prefix: '/uploads/',
     decorateReply: false,
     cacheControl: true,
-    maxAge: '7d',
+    maxAge: '365d',
     immutable: true
   });
 

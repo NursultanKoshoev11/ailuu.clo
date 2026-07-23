@@ -4,10 +4,16 @@ const state = {
   category: 'Все',
   activeProduct: null,
   activeImageIndex: 0,
+  openRequestId: 0,
   selectedSize: '',
   quantity: 1,
   cart: loadCart()
 };
+
+// Keep decoded images and complete gallery DOM nodes alive for the whole page session.
+// Reopening a product reuses the exact same elements instead of recreating <img> tags.
+const imageMemoryCache = new Map();
+const galleryNodeCache = new Map();
 
 const elements = {
   announcement: document.querySelector('#announcement'),
@@ -49,6 +55,7 @@ async function init() {
     const data = await response.json();
     state.settings = data.settings || {};
     state.products = data.products || [];
+    preloadCatalogImages(state.products);
     applySettings();
     renderFilters();
     renderProducts();
@@ -94,7 +101,7 @@ function renderProducts() {
 function productCard(product) {
   const imageUrl = primaryImage(product);
   const image = imageUrl
-    ? `<img src="${escapeAttribute(imageUrl)}" alt="${escapeAttribute(product.name)}" loading="lazy">`
+    ? `<img src="${escapeAttribute(imageUrl)}" alt="${escapeAttribute(product.name)}" loading="eager" decoding="async" fetchpriority="high">`
     : '<div class="product-placeholder" aria-hidden="true"></div>';
   const photoCount = productImages(product).length;
   return `<article class="product-card reveal visible" data-product-id="${escapeAttribute(product.id)}" tabindex="0" role="button" aria-label="Открыть ${escapeAttribute(product.name)}">
@@ -122,26 +129,131 @@ function primaryImage(product) {
   return productImages(product)[0] || '';
 }
 
-function renderProductGallery(product) {
-  const images = productImages(product);
-  if (!images.length) {
-    elements.modalImage.innerHTML = '<div class="product-placeholder gallery-placeholder" aria-hidden="true"></div>';
-    return;
+
+function getCachedImage(url, priority = 'auto') {
+  const source = String(url || '');
+  if (!source) return { image: null, promise: Promise.resolve(null) };
+  const existing = imageMemoryCache.get(source);
+  if (existing) {
+    if (priority === 'high' && existing.image) existing.image.fetchPriority = 'high';
+    return existing;
   }
-  state.activeImageIndex = Math.max(0, Math.min(state.activeImageIndex, images.length - 1));
-  const active = images[state.activeImageIndex];
-  const thumbnails = images.length > 1
-    ? `<div class="gallery-thumbnails" aria-label="Фотографии товара">${images.map((image, index) => `<button class="gallery-thumb ${index === state.activeImageIndex ? 'active' : ''}" type="button" data-gallery-index="${index}" aria-label="Открыть фотографию ${index + 1}"><img src="${escapeAttribute(image)}" alt="" loading="lazy"></button>`).join('')}</div>`
-    : '';
-  elements.modalImage.innerHTML = `<div class="product-gallery">
-    <div class="gallery-main"><img src="${escapeAttribute(active)}" alt="${escapeAttribute(product.name)}"></div>
-    ${thumbnails}
-  </div>`;
+
+  const image = new Image();
+  image.decoding = 'async';
+  image.fetchPriority = priority;
+  const promise = new Promise((resolve) => {
+    const complete = async () => {
+      try {
+        await image.decode?.();
+      } catch {
+        // The browser may reject decode() even when the image is already usable.
+      }
+      resolve(image);
+    };
+    image.addEventListener('load', complete, { once: true });
+    image.addEventListener('error', () => resolve(null), { once: true });
+  });
+  image.src = source;
+  const entry = { image, promise };
+  imageMemoryCache.set(source, entry);
+  return entry;
 }
 
-function openProduct(id) {
+function preloadCatalogImages(products) {
+  const primary = [...new Set(products.map(primaryImage).filter(Boolean))];
+  primary.forEach((url) => getCachedImage(url, 'high'));
+
+  const all = [...new Set(products.flatMap(productImages).filter(Boolean))]
+    .filter((url) => !primary.includes(url));
+  const loadRemaining = () => all.forEach((url) => getCachedImage(url, 'low'));
+  if ('requestIdleCallback' in window) requestIdleCallback(loadRemaining, { timeout: 1200 });
+  else setTimeout(loadRemaining, 0);
+}
+
+function createGalleryNode(product) {
+  const images = productImages(product);
+  if (!images.length) {
+    const placeholder = document.createElement('div');
+    placeholder.className = 'product-placeholder gallery-placeholder';
+    placeholder.setAttribute('aria-hidden', 'true');
+    return placeholder;
+  }
+
+  const gallery = document.createElement('div');
+  gallery.className = 'product-gallery';
+  gallery.dataset.galleryProductId = product.id;
+
+  const main = document.createElement('div');
+  main.className = 'gallery-main';
+  const mainImage = document.createElement('img');
+  mainImage.alt = product.name;
+  mainImage.decoding = 'async';
+  mainImage.fetchPriority = 'high';
+  mainImage.dataset.galleryMainImage = '';
+  main.append(mainImage);
+  gallery.append(main);
+
+  if (images.length > 1) {
+    const thumbnails = document.createElement('div');
+    thumbnails.className = 'gallery-thumbnails';
+    thumbnails.setAttribute('aria-label', 'Фотографии товара');
+    images.forEach((imageUrl, index) => {
+      const button = document.createElement('button');
+      button.className = 'gallery-thumb';
+      button.type = 'button';
+      button.dataset.galleryIndex = String(index);
+      button.setAttribute('aria-label', `Открыть фотографию ${index + 1}`);
+
+      const image = document.createElement('img');
+      image.src = imageUrl;
+      image.alt = '';
+      image.loading = 'eager';
+      image.decoding = 'async';
+      button.append(image);
+      thumbnails.append(button);
+    });
+    gallery.append(thumbnails);
+  }
+
+  return gallery;
+}
+
+function renderProductGallery(product) {
+  const images = productImages(product);
+  let gallery = galleryNodeCache.get(product.id);
+  if (!gallery) {
+    gallery = createGalleryNode(product);
+    galleryNodeCache.set(product.id, gallery);
+  }
+
+  if (images.length) {
+    state.activeImageIndex = Math.max(0, Math.min(state.activeImageIndex, images.length - 1));
+    const activeUrl = images[state.activeImageIndex];
+    const mainImage = gallery.querySelector('[data-gallery-main-image]');
+    const absoluteUrl = new URL(activeUrl, document.baseURI).href;
+    if (mainImage && mainImage.src !== absoluteUrl) mainImage.src = activeUrl;
+    gallery.querySelectorAll('[data-gallery-index]').forEach((button) => {
+      button.classList.toggle('active', Number(button.dataset.galleryIndex) === state.activeImageIndex);
+    });
+  }
+
+  if (elements.modalImage.firstElementChild !== gallery) {
+    elements.modalImage.replaceChildren(gallery);
+  }
+}
+
+async function openProduct(id) {
   const product = state.products.find((item) => item.id === id);
   if (!product) return;
+  const requestId = ++state.openRequestId;
+  const images = productImages(product);
+
+  // Wait for this product's images to be decoded once before showing the modal.
+  // Subsequent opens resolve immediately from imageMemoryCache.
+  await Promise.all(images.map((url, index) => getCachedImage(url, index === 0 ? 'high' : 'auto').promise));
+  if (requestId !== state.openRequestId) return;
+
   state.activeProduct = product;
   state.activeImageIndex = 0;
   state.selectedSize = product.sizes?.[0] || '';
@@ -166,6 +278,7 @@ function renderOptions(container, label, options) {
 }
 
 function closeProduct() {
+  state.openRequestId += 1;
   elements.productModal.hidden = true;
   state.activeProduct = null;
   unlockScrollIfClear();
