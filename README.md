@@ -154,14 +154,14 @@ curl http://127.0.0.1:3000/ready
 Нужны Node.js 20.10+ и PostgreSQL.
 
 ```bash
-npm install
+npm ci
 cp .env.example .env
 npm run migrate
 npm run seed
 npm start
 ```
 
-После первого сетевого `npm install` обязательно закоммитьте созданный `package-lock.json`, затем замените `npm install` на `npm ci` в Dockerfile и CI. В текущем коде прямые зависимости уже закреплены точными версиями.
+Зависимости зафиксированы в `package-lock.json`; для воспроизводимых установок используйте только `npm ci`.
 
 ## Проверки
 
