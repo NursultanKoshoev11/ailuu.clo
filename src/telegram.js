@@ -75,9 +75,10 @@ function createTelegramManager({ token, adminIds, publicBaseUrl, notificationCha
     return {
       inline_keyboard: [
         [{ text: '✏️ Название', callback_data: `edit:${product.id}:name` }, { text: '💰 Цена', callback_data: `edit:${product.id}:price` }],
-        [{ text: '📝 Описание', callback_data: `edit:${product.id}:description` }, { text: '🖼 Фото', callback_data: `edit:${product.id}:image` }],
-        [{ text: '📂 Категория', callback_data: `edit:${product.id}:category` }, { text: '📏 Размеры', callback_data: `edit:${product.id}:sizes` }],
-        [{ text: '🎨 Цвета', callback_data: `edit:${product.id}:colors` }, { text: product.inStock ? '🙈 Скрыть' : '👁 Показать', callback_data: `toggle:${product.id}` }],
+        [{ text: '🏷 Старая цена', callback_data: `edit:${product.id}:oldPrice` }, { text: '📝 Описание', callback_data: `edit:${product.id}:description` }],
+        [{ text: '🖼 Фото', callback_data: `edit:${product.id}:image` }, { text: '📂 Категория', callback_data: `edit:${product.id}:category` }],
+        [{ text: '📏 Размеры', callback_data: `edit:${product.id}:sizes` }, { text: '🎨 Цвета', callback_data: `edit:${product.id}:colors` }],
+        [{ text: product.inStock ? '🙈 Скрыть' : '👁 Показать', callback_data: `toggle:${product.id}` }],
         [{ text: product.featured ? '⭐ Убрать из избранного' : '⭐ Сделать избранным', callback_data: `feature:${product.id}` }],
         [{ text: '🗑 Удалить', callback_data: `delete:ask:${product.id}` }, { text: '⬅️ К товарам', callback_data: 'products:0' }]
       ]
@@ -236,7 +237,7 @@ function createTelegramManager({ token, adminIds, publicBaseUrl, notificationCha
     const product = getProduct(id);
     if (!product) return sendMessage(chatId, 'Товар не найден.');
     sessions.set(String(userId), { type: 'edit', productId: id, field });
-    const labels = { name: 'новое название', price: 'новую цену', description: 'новое описание', category: 'новую категорию', sizes: 'размеры через запятую', colors: 'цвета через запятую', image: 'новую фотографию' };
+    const labels = { name: 'новое название', price: 'новую цену', oldPrice: 'старую цену (0 — убрать скидку)', description: 'новое описание', category: 'новую категорию', sizes: 'размеры через запятую', colors: 'цвета через запятую', image: 'новую фотографию' };
     await sendMessage(chatId, `Отправьте ${labels[field] || 'новое значение'} для «${escapeHtml(product.name)}».`, { reply_markup: cancelKeyboard() });
   }
 
@@ -248,7 +249,7 @@ function createTelegramManager({ token, adminIds, publicBaseUrl, notificationCha
       if (!message.photo?.length) return sendMessage(chatId, 'Отправьте фотографию.');
       value = await downloadTelegramPhoto(message.photo.at(-1).file_id);
     }
-    if (field === 'price') {
+    if (field === 'price' || field === 'oldPrice') {
       value = Number(value.replace(/\s/g, '').replace(',', '.'));
       if (!Number.isFinite(value) || value < 0) return sendMessage(chatId, 'Нужна корректная цена числом.');
     }
