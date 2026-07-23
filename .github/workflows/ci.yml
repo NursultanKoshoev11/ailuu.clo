@@ -1,0 +1,60 @@
+name: CI
+
+on:
+  push:
+    branches: [main, production-ready]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: ailuu_test
+          POSTGRES_USER: ailuu
+          POSTGRES_PASSWORD: test_password
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U ailuu -d ailuu_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      NODE_ENV: test
+      HOST: 127.0.0.1
+      PORT: 3000
+      PUBLIC_BASE_URL: http://127.0.0.1:3000
+      DATABASE_URL: postgresql://ailuu:test_password@127.0.0.1:5432/ailuu_test
+      DATABASE_SSL: "false"
+      TELEGRAM_MODE: disabled
+      RUN_MIGRATIONS_ON_START: "false"
+      RUN_SEED_ON_START: "false"
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm install --ignore-scripts --no-audit --no-fund
+      - run: npm run check
+      - run: npm test
+      - run: npm run migrate
+      - run: npm run seed
+      - name: Application smoke test
+        run: |
+          node src/server.js > /tmp/ailuu.log 2>&1 &
+          APP_PID=$!
+          trap 'kill $APP_PID || true; cat /tmp/ailuu.log' EXIT
+          for i in {1..30}; do
+            if curl --fail --silent http://127.0.0.1:3000/ready >/dev/null; then break; fi
+            sleep 1
+          done
+          node scripts/smoke-test.js

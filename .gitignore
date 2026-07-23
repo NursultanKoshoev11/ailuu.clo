@@ -1,7 +1,14 @@
-node_modules/
 .env
+.env.*
+!.env.example
+node_modules/
+*.log
 npm-debug.log*
 .DS_Store
-data/store.json
+.vscode/
+.idea/
 data/uploads/*
 !data/uploads/.gitkeep
+data/store.json
+backups/
+coverage/
