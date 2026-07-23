@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-labelledby="title">
+  <title>AILUU.CLO</title>
+  <rect width="64" height="64" rx="20" fill="#2d3029"/>
+  <path d="M32 11c12 7 18 17 18 30v12H14V41c0-13 6-23 18-30Z" fill="none" stroke="#eee8df" stroke-width="2"/>
+  <path d="M24 43 32 21l8 22M27 35h10" fill="none" stroke="#eee8df" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>
