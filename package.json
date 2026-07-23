@@ -1,0 +1,16 @@
+{
+  "name": "ailuu-clo-store",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Одностраничный магазин AILUU.CLO с управлением через Telegram-бота",
+  "main": "src/server.js",
+  "type": "commonjs",
+  "scripts": {
+    "start": "node src/server.js",
+    "dev": "node --watch src/server.js",
+    "check": "node --check src/server.js && node --check src/store.js && node --check src/telegram.js && node --check public/app.js"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
