@@ -2,11 +2,11 @@ name: CI
 
 on:
   push:
-    branches: [main, production-ready, lockfile-hardening]
+    branches: [main]
   pull_request:
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   test:
@@ -40,25 +40,11 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
-        with:
-          ref: ${{ github.event_name == 'pull_request' && github.head_ref || github.ref_name }}
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      - run: npm install --ignore-scripts --no-audit --no-fund
-      - name: Publish generated lockfile once
-        if: github.ref_name == 'lockfile-hardening' || github.head_ref == 'lockfile-hardening'
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          if ! git ls-files --error-unmatch package-lock.json >/dev/null 2>&1; then
-            jq -n \
-              --arg message "chore: add npm lockfile" \
-              --arg content "$(base64 -w0 package-lock.json)" \
-              --arg branch "lockfile-hardening" \
-              '{message:$message,content:$content,branch:$branch}' > /tmp/lockfile.json
-            gh api --method PUT "repos/${GITHUB_REPOSITORY}/contents/package-lock.json" --input /tmp/lockfile.json
-          fi
+          cache: npm
+      - run: npm ci --ignore-scripts --no-audit --no-fund
       - run: npm run check
       - run: npm test
       - run: npm run migrate
