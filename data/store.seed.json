@@ -15,7 +15,6 @@
   },
   "products": [
     {
-      "id": "sample-abaya",
       "name": "Абая Noor",
       "price": 4200,
       "oldPrice": 0,
@@ -25,11 +24,9 @@
       "colors": ["Мокко", "Чёрный"],
       "image": "",
       "inStock": true,
-      "featured": true,
-      "createdAt": "2026-07-23T00:00:00.000Z"
+      "featured": true
     },
     {
-      "id": "sample-set",
       "name": "Комплект Safa",
       "price": 5100,
       "oldPrice": 5600,
@@ -39,11 +36,9 @@
       "colors": ["Олива", "Графит"],
       "image": "",
       "inStock": true,
-      "featured": true,
-      "createdAt": "2026-07-23T00:00:00.000Z"
+      "featured": true
     },
     {
-      "id": "sample-hijab",
       "name": "Палантин Haya",
       "price": 950,
       "oldPrice": 0,
@@ -53,9 +48,7 @@
       "colors": ["Песочный", "Пудровый", "Чёрный"],
       "image": "",
       "inStock": true,
-      "featured": false,
-      "createdAt": "2026-07-23T00:00:00.000Z"
+      "featured": false
     }
-  ],
-  "orders": []
+  ]
 }
