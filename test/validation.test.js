@@ -2,12 +2,13 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const { orderSchema, parseProduct } = require('../src/validation');
 
-test('order schema accepts a valid order', () => {
+test('order schema accepts a valid order with a height size', () => {
   const parsed = orderSchema.parse({
     customer: { name: 'Айжан', phone: '+996700000000' },
-    items: [{ productId: '8eefedc2-cff0-4bf9-894a-86a30aa1be31', quantity: 2, size: 'M', color: 'Чёрный' }]
+    items: [{ productId: '8eefedc2-cff0-4bf9-894a-86a30aa1be31', quantity: 2, size: '80-90 см' }]
   });
   assert.equal(parsed.items[0].quantity, 2);
+  assert.equal(parsed.items[0].size, '80-90 см');
 });
 
 test('order schema rejects excessive quantity', () => {
@@ -17,10 +18,14 @@ test('order schema rejects excessive quantity', () => {
   }));
 });
 
-test('product parser normalizes duplicate lists', () => {
+test('product parser normalizes sizes and multiple images', () => {
   const product = parseProduct({
-    name: 'Абая', price: 1000, sizes: 'M, M, L', colors: ['Чёрный', 'Чёрный']
+    name: 'Платье',
+    price: 1000,
+    sizes: '80-90 см, 80-90 см, 100-110 см',
+    images: ['/uploads/one.jpg', '/uploads/one.jpg', '/uploads/two.jpg']
   });
-  assert.deepEqual(product.sizes, ['M', 'L']);
-  assert.deepEqual(product.colors, ['Чёрный']);
+  assert.deepEqual(product.sizes, ['80-90 см', '100-110 см']);
+  assert.deepEqual(product.images, ['/uploads/one.jpg', '/uploads/two.jpg']);
+  assert.equal(product.image, '/uploads/one.jpg');
 });

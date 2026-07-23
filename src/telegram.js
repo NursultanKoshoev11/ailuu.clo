@@ -22,6 +22,8 @@ const { downloadTelegramImage, removeLocalImage } = require('./storage');
 
 const PRODUCT_PAGE_SIZE = 8;
 const ORDER_PAGE_SIZE = 8;
+const MAX_PRODUCT_IMAGES = 10;
+const STANDARD_SIZES = ['80-90 см', '100-110 см', '120-130 см', '140-150 см'];
 
 function createTelegramManager(config) {
   if (config.TELEGRAM_MODE === 'disabled') return createDisabledManager();
@@ -30,7 +32,19 @@ function createTelegramManager(config) {
     handlerTimeout: 45_000
   });
   let pollingPromise = null;
+  const sessionQueues = new Map();
   const actor = (ctx) => ({ type: 'telegram_admin', id: String(ctx.from?.id || '') });
+  const enqueueSession = async (userId, task) => {
+    const key = String(userId);
+    const previous = sessionQueues.get(key) || Promise.resolve();
+    const current = previous.catch(() => {}).then(task);
+    sessionQueues.set(key, current);
+    try {
+      return await current;
+    } finally {
+      if (sessionQueues.get(key) === current) sessionQueues.delete(key);
+    }
+  };
 
   bot.use(async (ctx, next) => {
     const updateId = ctx.update?.update_id;
@@ -59,10 +73,7 @@ function createTelegramManager(config) {
   bot.command('orders', async (ctx) => showOrders(ctx, 0));
   bot.command('settings', async (ctx) => showSettings(ctx));
   bot.command('add', async (ctx) => startAdd(ctx));
-  bot.command('cancel', async (ctx) => {
-    await clearTelegramSession(ctx.from.id);
-    await ctx.reply('Действие отменено.', mainKeyboard(config.PUBLIC_BASE_URL));
-  });
+  bot.command('cancel', async (ctx) => cancelCurrentSession(ctx));
 
   bot.on('callback_query', async (ctx) => {
     const data = String(ctx.callbackQuery?.data || '');
@@ -70,10 +81,7 @@ function createTelegramManager(config) {
     if (!data || data === 'noop') return;
 
     if (data === 'home') return showHome(ctx);
-    if (data === 'cancel') {
-      await clearTelegramSession(ctx.from.id);
-      return ctx.reply('Действие отменено.', mainKeyboard(config.PUBLIC_BASE_URL));
-    }
+    if (data === 'cancel') return cancelCurrentSession(ctx);
     if (data === 'add:start') return startAdd(ctx);
     if (data.startsWith('add:featured:')) return finishAdd(ctx, data.endsWith(':yes'));
     if (data.startsWith('products:')) return showProducts(ctx, Number(data.split(':')[1]) || 0);
@@ -96,20 +104,35 @@ function createTelegramManager(config) {
     if (data.startsWith('setting:')) return startSettingEdit(ctx, data.slice('setting:'.length));
   });
 
-  bot.on(['text', 'photo'], async (ctx) => {
+  bot.on(['text', 'photo'], async (ctx) => enqueueSession(ctx.from.id, async () => {
     const session = await getTelegramSession(ctx.from.id);
     if (!session) return;
     if (session.type === 'add') return processAddStep(ctx, session);
     if (session.type === 'edit') return processEdit(ctx, session);
     if (session.type === 'setting') return processSettingEdit(ctx, session);
-  });
+  }));
 
   bot.catch(async (error, ctx) => {
     console.error('Telegram handler error', { updateId: ctx.update?.update_id, error });
     if (ctx.chat?.id) await ctx.reply('Произошла ошибка. Попробуйте ещё раз или отправьте /cancel.').catch(() => {});
   });
 
+  async function cancelCurrentSession(ctx) {
+    const session = await getTelegramSession(ctx.from.id);
+    const unsavedImages = session?.type === 'add'
+      ? (session.draft?.images || [])
+      : (session?.type === 'edit' ? (session.addedImages || []) : []);
+    await removeImages(unsavedImages);
+    await clearTelegramSession(ctx.from.id);
+    return ctx.reply('Действие отменено.', mainKeyboard(config.PUBLIC_BASE_URL));
+  }
+
   async function showHome(ctx) {
+    const session = await getTelegramSession(ctx.from.id);
+    const unsavedImages = session?.type === 'add'
+      ? (session.draft?.images || [])
+      : (session?.type === 'edit' ? (session.addedImages || []) : []);
+    await removeImages(unsavedImages);
     await clearTelegramSession(ctx.from.id);
     const [productCount, orders] = await Promise.all([countProducts(), listOrders(1)]);
     const lastOrder = orders[0] ? `\nПоследний заказ: ${escapeHtml(orders[0].id)} · ${statusLabel(orders[0].status)}` : '';
@@ -148,13 +171,14 @@ function createTelegramManager(config) {
   }
 
   async function startAdd(ctx) {
-    await setTelegramSession(ctx.from.id, ctx.chat.id, { type: 'add', step: 'name', draft: {} });
-    await ctx.reply('<b>Новый товар</b>\n1/10. Отправьте название.', { parse_mode: 'HTML', ...cancelKeyboard() });
+    await setTelegramSession(ctx.from.id, ctx.chat.id, { type: 'add', step: 'name', draft: { sizes: STANDARD_SIZES, images: [] } });
+    await ctx.reply('<b>Новый товар</b>\n1/8. Отправьте название.', { parse_mode: 'HTML', ...cancelKeyboard() });
   }
 
   async function processAddStep(ctx, session) {
     const text = String(ctx.message?.text || '').trim();
-    const draft = session.draft || {};
+    const normalizedText = text.toLowerCase();
+    const draft = session.draft || { sizes: STANDARD_SIZES, images: [] };
     const next = async (step, message) => {
       await setTelegramSession(ctx.from.id, ctx.chat.id, { ...session, step, draft });
       return ctx.reply(message, { parse_mode: 'HTML', ...cancelKeyboard() });
@@ -163,31 +187,24 @@ function createTelegramManager(config) {
     if (session.step === 'name') {
       if (!text) return ctx.reply('Название не может быть пустым.');
       draft.name = text;
-      return next('price', '2/10. Отправьте цену числом, например <b>4200</b>.');
+      return next('price', '2/8. Отправьте цену числом, например <b>4200</b>.');
     }
     if (session.step === 'price') {
       const price = parseMoney(text);
       if (price === null) return ctx.reply('Нужна корректная цена числом.');
       draft.price = price;
-      return next('oldPrice', '3/10. Отправьте старую цену или <b>0</b>, если скидки нет.');
+      return next('oldPrice', '3/8. Отправьте старую цену или <b>0</b>, если скидки нет.');
     }
     if (session.step === 'oldPrice') {
       const oldPrice = parseMoney(text);
       if (oldPrice === null) return ctx.reply('Нужна корректная цена числом.');
       draft.oldPrice = oldPrice;
-      return next('category', '4/10. Отправьте категорию, например <b>Абая</b>.');
+      return next('category', '4/8. Отправьте категорию, например <b>Платья</b>.');
     }
     if (session.step === 'category') {
       draft.category = text || 'Коллекция';
-      return next('sizes', '5/10. Отправьте размеры через запятую.');
-    }
-    if (session.step === 'sizes') {
-      draft.sizes = text;
-      return next('colors', '6/10. Отправьте цвета через запятую.');
-    }
-    if (session.step === 'colors') {
-      draft.colors = text;
-      return next('stock', '7/10. Отправьте остаток числом или <b>∞</b> для неограниченного остатка.');
+      draft.sizes = STANDARD_SIZES;
+      return next('stock', `5/8. Размеры установлены автоматически: <b>${STANDARD_SIZES.join(', ')}</b>.\nТеперь отправьте остаток числом или <b>∞</b> для неограниченного остатка.`);
     }
     if (session.step === 'stock') {
       if (text === '∞' || /^без/i.test(text)) draft.stockQuantity = null;
@@ -196,18 +213,28 @@ function createTelegramManager(config) {
         if (!Number.isInteger(stock) || stock < 0) return ctx.reply('Отправьте целое число от 0 или символ ∞.');
         draft.stockQuantity = stock;
       }
-      return next('description', '8/10. Отправьте описание товара.');
+      return next('description', '6/8. Отправьте описание товара.');
     }
     if (session.step === 'description') {
       draft.description = text;
-      return next('image', '9/10. Отправьте фотографию или слово <b>пропустить</b>.');
+      draft.images = Array.isArray(draft.images) ? draft.images : [];
+      return next('images', `7/8. Отправляйте фотографии по одной, максимум ${MAX_PRODUCT_IMAGES}. Когда закончите, напишите <b>готово</b>. Если фото пока нет — <b>пропустить</b>.`);
     }
-    if (session.step === 'image') {
+    if (session.step === 'images') {
       const photo = ctx.message?.photo?.at(-1);
-      if (photo) draft.image = await downloadTelegramImage(bot, photo.file_id);
-      else if (text.toLowerCase() !== 'пропустить') return ctx.reply('Отправьте фотографию или слово «пропустить».');
+      draft.images = Array.isArray(draft.images) ? draft.images : [];
+      if (photo) {
+        if (draft.images.length >= MAX_PRODUCT_IMAGES) return ctx.reply(`Можно добавить не больше ${MAX_PRODUCT_IMAGES} фотографий. Напишите «готово».`);
+        const image = await downloadTelegramImage(bot, photo.file_id);
+        draft.images.push(image);
+        await setTelegramSession(ctx.from.id, ctx.chat.id, { ...session, step: 'images', draft });
+        return ctx.reply(`✅ Фото добавлено: ${draft.images.length}/${MAX_PRODUCT_IMAGES}. Отправьте ещё одно или напишите <b>готово</b>.`, { parse_mode: 'HTML', ...cancelKeyboard() });
+      }
+      if (!['готово', 'завершить', 'пропустить'].includes(normalizedText)) {
+        return ctx.reply('Отправьте фотографию или напишите «готово».');
+      }
       await setTelegramSession(ctx.from.id, ctx.chat.id, { ...session, step: 'featured', draft });
-      return ctx.reply('10/10. Показывать товар в подборке «Новинки»?', {
+      return ctx.reply('8/8. Показывать товар в подборке «Новинки»?', {
         ...Markup.inlineKeyboard([
           [Markup.button.callback('⭐ Да', 'add:featured:yes'), Markup.button.callback('Нет', 'add:featured:no')],
           [Markup.button.callback('✖️ Отменить', 'cancel')]
@@ -232,10 +259,19 @@ function createTelegramManager(config) {
     if (!product) return ctx.reply('Товар не найден.');
     const labels = {
       name: 'новое название', price: 'новую цену', oldPrice: 'старую цену (0 — убрать скидку)',
-      description: 'новое описание', category: 'новую категорию', sizes: 'размеры через запятую',
-      colors: 'цвета через запятую', image: 'новую фотографию или «удалить»',
+      description: 'новое описание', category: 'новую категорию',
+      sizes: 'размеры в сантиметрах через запятую, например 80-90 см, 100-110 см',
       stockQuantity: 'остаток числом или ∞', sortOrder: 'порядок сортировки числом'
     };
+    if (field === 'images') {
+      await setTelegramSession(ctx.from.id, ctx.chat.id, {
+        type: 'edit', productId: id, field, images: product.images || [], addedImages: []
+      });
+      return ctx.reply(
+        `Сейчас фотографий: <b>${product.images?.length || 0}</b>. Отправляйте новые фото по одному — они добавятся к текущим.\nНапишите <b>очистить</b>, чтобы убрать все фото, или <b>готово</b>, чтобы сохранить.`,
+        { parse_mode: 'HTML', ...cancelKeyboard() }
+      );
+    }
     if (!labels[field]) return ctx.reply('Неизвестное поле.');
     await setTelegramSession(ctx.from.id, ctx.chat.id, { type: 'edit', productId: id, field });
     await ctx.reply(`Отправьте ${labels[field]} для «${escapeHtml(product.name)}».`, { parse_mode: 'HTML', ...cancelKeyboard() });
@@ -244,17 +280,43 @@ function createTelegramManager(config) {
   async function processEdit(ctx, session) {
     const product = await getProduct(session.productId);
     if (!product) {
+      await removeImages(session.addedImages || []);
       await clearTelegramSession(ctx.from.id);
       return ctx.reply('Товар не найден.');
     }
     const text = String(ctx.message?.text || '').trim();
-    let value = text;
-    if (session.field === 'image') {
+    const normalizedText = text.toLowerCase();
+
+    if (session.field === 'images') {
+      const images = Array.isArray(session.images) ? session.images : (product.images || []);
+      const addedImages = Array.isArray(session.addedImages) ? session.addedImages : [];
       const photo = ctx.message?.photo?.at(-1);
-      if (photo) value = await downloadTelegramImage(bot, photo.file_id);
-      else if (text.toLowerCase() === 'удалить') value = '';
-      else return ctx.reply('Отправьте фотографию или слово «удалить».');
+      if (photo) {
+        if (images.length >= MAX_PRODUCT_IMAGES) return ctx.reply(`Можно сохранить не больше ${MAX_PRODUCT_IMAGES} фотографий. Напишите «готово» или «очистить».`);
+        const image = await downloadTelegramImage(bot, photo.file_id);
+        images.push(image);
+        addedImages.push(image);
+        await setTelegramSession(ctx.from.id, ctx.chat.id, { ...session, images, addedImages });
+        return ctx.reply(`✅ Фото добавлено: ${images.length}/${MAX_PRODUCT_IMAGES}. Отправьте ещё или напишите <b>готово</b>.`, { parse_mode: 'HTML', ...cancelKeyboard() });
+      }
+      if (['очистить', 'удалить все', 'удалить'].includes(normalizedText)) {
+        await removeImages(addedImages);
+        await setTelegramSession(ctx.from.id, ctx.chat.id, { ...session, images: [], addedImages: [] });
+        return ctx.reply('Все текущие фото будут удалены после сохранения. Отправьте новые фото или напишите <b>готово</b>.', { parse_mode: 'HTML', ...cancelKeyboard() });
+      }
+      if (!['готово', 'завершить'].includes(normalizedText)) {
+        return ctx.reply('Отправьте фотографию, «очистить» или «готово».');
+      }
+      const updated = await updateProduct(product.id, { images }, actor(ctx));
+      await removeImages((product.images || []).filter((image) => !images.includes(image)));
+      await clearTelegramSession(ctx.from.id);
+      return ctx.reply(`✅ Фотографии сохранены: ${updated.images.length}.\n\n${await formatProduct(updated)}`, {
+        parse_mode: 'HTML',
+        ...productKeyboard(updated)
+      });
     }
+
+    let value = text;
     if (['price', 'oldPrice'].includes(session.field)) {
       value = parseMoney(text);
       if (value === null) return ctx.reply('Нужна корректная цена числом.');
@@ -272,9 +334,6 @@ function createTelegramManager(config) {
     }
 
     const updated = await updateProduct(product.id, { [session.field]: value }, actor(ctx));
-    if (session.field === 'image' && product.image && product.image !== updated.image) {
-      await removeLocalImage(product.image).catch(() => {});
-    }
     await clearTelegramSession(ctx.from.id);
     await ctx.reply(`✅ Изменение сохранено.\n\n${await formatProduct(updated)}`, {
       parse_mode: 'HTML',
@@ -312,7 +371,7 @@ function createTelegramManager(config) {
     const product = await getProduct(id);
     const deleted = await deleteProduct(id, actor(ctx));
     if (!deleted) return ctx.reply('Товар уже удалён.');
-    if (product?.image) await removeLocalImage(product.image).catch(() => {});
+    await removeImages(product?.images || []);
     await ctx.reply('Товар удалён.', Markup.inlineKeyboard([[Markup.button.callback('⬅️ К товарам', 'products:0')]]));
   }
 
@@ -337,7 +396,10 @@ function createTelegramManager(config) {
     const order = await getOrder(id);
     if (!order) return ctx.reply('Заказ не найден.');
     const settings = await getSettings();
-    const lines = order.items.map((item) => `• ${escapeHtml(item.name)} × ${item.quantity} — ${formatMoney(item.lineTotal, settings.currency)}\n  ${escapeHtml([item.size, item.color].filter(Boolean).join(' · '))}`);
+    const lines = order.items.map((item) => {
+      const size = item.size ? `\n  Размер: ${escapeHtml(item.size)}` : '';
+      return `• ${escapeHtml(item.name)} × ${item.quantity} — ${formatMoney(item.lineTotal, settings.currency)}${size}`;
+    });
     const text = [
       `<b>Заказ ${escapeHtml(order.id)}</b>`,
       `Статус: ${statusIcon(order.status)} ${statusLabel(order.status)}`,
@@ -400,7 +462,7 @@ function createTelegramManager(config) {
       `${formatMoney(product.price, settings.currency)}${product.oldPrice ? `  <s>${formatMoney(product.oldPrice, settings.currency)}</s>` : ''}`,
       `Категория: ${escapeHtml(product.category || '—')}`,
       `Размеры: ${escapeHtml(product.sizes.join(', ') || '—')}`,
-      `Цвета: ${escapeHtml(product.colors.join(', ') || '—')}`,
+      `Фотографий: ${product.images?.length || 0}`,
       `Остаток: ${product.stockQuantity === null ? '∞' : product.stockQuantity}`,
       `На сайте: ${product.isActive ? 'да' : 'нет'}`,
       `Новинка: ${product.featured ? 'да' : 'нет'}`,
@@ -458,7 +520,10 @@ function createTelegramManager(config) {
     const chatId = config.ORDER_NOTIFICATION_CHAT_ID || [...config.telegramAdminIds][0];
     if (!chatId || order.honeypot) return;
     const settings = await getSettings();
-    const items = order.items.map((item) => `• ${escapeHtml(item.name)} × ${item.quantity} — ${formatMoney(item.lineTotal, settings.currency)}`).join('\n');
+    const items = order.items.map((item) => {
+      const size = item.size ? ` · ${escapeHtml(item.size)}` : '';
+      return `• ${escapeHtml(item.name)} × ${item.quantity}${size} — ${formatMoney(item.lineTotal, settings.currency)}`;
+    }).join('\n');
     await bot.telegram.sendMessage(chatId, [
       `🆕 <b>Новый заказ ${escapeHtml(order.id)}</b>`,
       `Клиент: ${escapeHtml(order.customer.name)}`,
@@ -500,9 +565,9 @@ function productKeyboard(product) {
   return Markup.inlineKeyboard([
     [Markup.button.callback('✏️ Название', `edit:${product.id}:name`), Markup.button.callback('💰 Цена', `edit:${product.id}:price`)],
     [Markup.button.callback('🏷 Старая цена', `edit:${product.id}:oldPrice`), Markup.button.callback('📝 Описание', `edit:${product.id}:description`)],
-    [Markup.button.callback('🖼 Фото', `edit:${product.id}:image`), Markup.button.callback('📂 Категория', `edit:${product.id}:category`)],
-    [Markup.button.callback('📏 Размеры', `edit:${product.id}:sizes`), Markup.button.callback('🎨 Цвета', `edit:${product.id}:colors`)],
-    [Markup.button.callback('📦 Остаток', `edit:${product.id}:stockQuantity`), Markup.button.callback('↕️ Сортировка', `edit:${product.id}:sortOrder`)],
+    [Markup.button.callback('🖼 Фотографии', `edit:${product.id}:images`), Markup.button.callback('📂 Категория', `edit:${product.id}:category`)],
+    [Markup.button.callback('📏 Размеры', `edit:${product.id}:sizes`), Markup.button.callback('📦 Остаток', `edit:${product.id}:stockQuantity`)],
+    [Markup.button.callback('↕️ Сортировка', `edit:${product.id}:sortOrder`)],
     [Markup.button.callback(product.isActive ? '🙈 Скрыть' : '👁 Показать', `toggle:${product.id}`)],
     [Markup.button.callback(product.featured ? '⭐ Убрать из новинок' : '⭐ Добавить в новинки', `feature:${product.id}`)],
     [Markup.button.callback('🗑 Удалить', `delete:ask:${product.id}`), Markup.button.callback('⬅️ К товарам', 'products:0')]
@@ -529,6 +594,12 @@ function paginationRow(prefix, page, totalPages) {
   return row;
 }
 
+
+async function removeImages(images) {
+  for (const image of [...new Set((images || []).filter(Boolean))]) {
+    await removeLocalImage(image).catch(() => {});
+  }
+}
 
 function safeEqual(left, right) {
   const leftBuffer = Buffer.from(String(left));

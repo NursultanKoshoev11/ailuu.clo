@@ -14,8 +14,7 @@ const orderSchema = z.object({
   items: z.array(z.object({
     productId: z.string().uuid('Некорректный товар.'),
     quantity: z.coerce.number().int().min(1).max(20),
-    size: optionalText(80),
-    color: optionalText(80)
+    size: optionalText(80)
   })).min(1, 'Корзина пуста.').max(30)
 }).strict();
 
@@ -26,7 +25,8 @@ const productInputSchema = z.object({
   category: text(100).optional().default('Коллекция'),
   description: optionalText(3000),
   sizes: z.union([z.array(text(80)), z.string()]).optional().default([]),
-  colors: z.union([z.array(text(80)), z.string()]).optional().default([]),
+  images: z.union([z.array(text(1000)), z.string()]).optional().default([]),
+  // Legacy single-image input remains accepted during upgrades.
   image: optionalText(1000),
   inStock: z.boolean().optional().default(true),
   featured: z.boolean().optional().default(false),
@@ -34,14 +34,21 @@ const productInputSchema = z.object({
   sortOrder: z.coerce.number().int().min(-1_000_000).max(1_000_000).optional().default(0)
 });
 
-function normalizeList(value) {
+function normalizeList(value, limit = 40) {
   const source = Array.isArray(value) ? value : String(value || '').split(',');
-  return [...new Set(source.map((item) => String(item).trim()).filter(Boolean))].slice(0, 40);
+  return [...new Set(source.map((item) => String(item).trim()).filter(Boolean))].slice(0, limit);
 }
 
 function parseProduct(input) {
   const parsed = productInputSchema.parse(input);
-  return { ...parsed, sizes: normalizeList(parsed.sizes), colors: normalizeList(parsed.colors) };
+  const imageSource = normalizeList(parsed.images, 10);
+  const images = imageSource.length ? imageSource : normalizeList(parsed.image ? [parsed.image] : [], 10);
+  return {
+    ...parsed,
+    sizes: normalizeList(parsed.sizes),
+    images,
+    image: images[0] || ''
+  };
 }
 
 module.exports = { orderSchema, productInputSchema, parseProduct, normalizeList };

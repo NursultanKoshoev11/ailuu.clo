@@ -3,8 +3,8 @@ const state = {
   products: [],
   category: 'Все',
   activeProduct: null,
+  activeImageIndex: 0,
   selectedSize: '',
-  selectedColor: '',
   quantity: 1,
   cart: loadCart()
 };
@@ -25,7 +25,6 @@ const elements = {
   modalPrice: document.querySelector('#modalPrice'),
   modalDescription: document.querySelector('#modalDescription'),
   sizeGroup: document.querySelector('#sizeGroup'),
-  colorGroup: document.querySelector('#colorGroup'),
   qtyValue: document.querySelector('#qtyValue'),
   addToCart: document.querySelector('#addToCart'),
   cartDrawer: document.querySelector('#cartDrawer'),
@@ -93,51 +92,77 @@ function renderProducts() {
 }
 
 function productCard(product) {
-  const image = product.image
-    ? `<img src="${escapeAttribute(product.image)}" alt="${escapeAttribute(product.name)}" loading="lazy">`
+  const imageUrl = primaryImage(product);
+  const image = imageUrl
+    ? `<img src="${escapeAttribute(imageUrl)}" alt="${escapeAttribute(product.name)}" loading="lazy">`
     : '<div class="product-placeholder" aria-hidden="true"></div>';
+  const photoCount = productImages(product).length;
   return `<article class="product-card reveal visible" data-product-id="${escapeAttribute(product.id)}" tabindex="0" role="button" aria-label="Открыть ${escapeAttribute(product.name)}">
     <div class="product-image">
       ${product.featured ? '<span class="product-badge">Новинка</span>' : ''}
+      ${photoCount > 1 ? `<span class="photo-count" aria-label="Фотографий: ${photoCount}">1/${photoCount}</span>` : ''}
       ${image}
       <button class="quick-add" type="button" data-quick-add="${escapeAttribute(product.id)}" aria-label="Добавить в корзину">+</button>
     </div>
     <div class="product-info">
-      <div class="product-meta"><span>${escapeHtml(product.category || 'Коллекция')}</span><span>${escapeHtml((product.colors || []).slice(0, 2).join(' · '))}</span></div>
+      <div class="product-meta"><span>${escapeHtml(product.category || 'Коллекция')}</span><span>${product.sizes?.length || 0} размера</span></div>
       <h3>${escapeHtml(product.name)}</h3>
       <div class="price"><span>${money(product.price)}</span>${product.oldPrice ? `<s>${money(product.oldPrice)}</s>` : ''}</div>
     </div>
   </article>`;
 }
 
+function productImages(product) {
+  const images = Array.isArray(product?.images) ? product.images.filter(Boolean) : [];
+  if (images.length) return images;
+  return product?.image ? [product.image] : [];
+}
+
+function primaryImage(product) {
+  return productImages(product)[0] || '';
+}
+
+function renderProductGallery(product) {
+  const images = productImages(product);
+  if (!images.length) {
+    elements.modalImage.innerHTML = '<div class="product-placeholder gallery-placeholder" aria-hidden="true"></div>';
+    return;
+  }
+  state.activeImageIndex = Math.max(0, Math.min(state.activeImageIndex, images.length - 1));
+  const active = images[state.activeImageIndex];
+  const thumbnails = images.length > 1
+    ? `<div class="gallery-thumbnails" aria-label="Фотографии товара">${images.map((image, index) => `<button class="gallery-thumb ${index === state.activeImageIndex ? 'active' : ''}" type="button" data-gallery-index="${index}" aria-label="Открыть фотографию ${index + 1}"><img src="${escapeAttribute(image)}" alt="" loading="lazy"></button>`).join('')}</div>`
+    : '';
+  elements.modalImage.innerHTML = `<div class="product-gallery">
+    <div class="gallery-main"><img src="${escapeAttribute(active)}" alt="${escapeAttribute(product.name)}"></div>
+    ${thumbnails}
+  </div>`;
+}
+
 function openProduct(id) {
   const product = state.products.find((item) => item.id === id);
   if (!product) return;
   state.activeProduct = product;
+  state.activeImageIndex = 0;
   state.selectedSize = product.sizes?.[0] || '';
-  state.selectedColor = product.colors?.[0] || '';
   state.quantity = 1;
-  elements.modalImage.innerHTML = product.image
-    ? `<img src="${escapeAttribute(product.image)}" alt="${escapeAttribute(product.name)}">`
-    : '<div class="product-placeholder" aria-hidden="true"></div>';
+  renderProductGallery(product);
   setText(elements.modalCategory, product.category || 'Коллекция');
   setText(elements.modalTitle, product.name);
   elements.modalPrice.innerHTML = `${money(product.price)} ${product.oldPrice ? `<s>${money(product.oldPrice)}</s>` : ''}`;
   setText(elements.modalDescription, product.description || 'Описание появится скоро.');
-  renderOptions(elements.sizeGroup, 'Размер', product.sizes || [], 'size');
-  renderOptions(elements.colorGroup, 'Цвет', product.colors || [], 'color');
+  renderOptions(elements.sizeGroup, 'Рост, см', product.sizes || []);
   elements.qtyValue.textContent = '1';
   elements.productModal.hidden = false;
   lockScroll();
 }
 
-function renderOptions(container, label, options, type) {
+function renderOptions(container, label, options) {
   if (!options.length) {
     container.innerHTML = '';
     return;
   }
-  const selected = type === 'size' ? state.selectedSize : state.selectedColor;
-  container.innerHTML = `<span>${label}</span><div class="option-list">${options.map((option) => `<button class="option-chip ${option === selected ? 'active' : ''}" type="button" data-option-type="${type}" data-option-value="${escapeAttribute(option)}">${escapeHtml(option)}</button>`).join('')}</div>`;
+  container.innerHTML = `<span>${label}</span><div class="option-list">${options.map((option) => `<button class="option-chip ${option === state.selectedSize ? 'active' : ''}" type="button" data-size-value="${escapeAttribute(option)}">${escapeHtml(option)}</button>`).join('')}</div>`;
 }
 
 function closeProduct() {
@@ -152,9 +177,8 @@ function addActiveToCart() {
     productId: state.activeProduct.id,
     name: state.activeProduct.name,
     price: state.activeProduct.price,
-    image: state.activeProduct.image,
+    image: primaryImage(state.activeProduct),
     size: state.selectedSize,
-    color: state.selectedColor,
     quantity: state.quantity
   });
   closeProduct();
@@ -165,7 +189,7 @@ function addActiveToCart() {
 function quickAdd(id) {
   const product = state.products.find((item) => item.id === id);
   if (!product) return;
-  addCartItem({ productId: product.id, name: product.name, price: product.price, image: product.image, size: product.sizes?.[0] || '', color: product.colors?.[0] || '', quantity: 1 });
+  addCartItem({ productId: product.id, name: product.name, price: product.price, image: primaryImage(product), size: product.sizes?.[0] || '', quantity: 1 });
   showToast('Товар добавлен в корзину');
 }
 
@@ -187,7 +211,7 @@ function renderCart() {
   elements.cartTotal.textContent = money(total);
   elements.cartItems.innerHTML = state.cart.map((item, index) => `<div class="cart-item">
     <div class="cart-thumb">${item.image ? `<img src="${escapeAttribute(item.image)}" alt="">` : '<div class="product-placeholder"></div>'}</div>
-    <div><h4>${escapeHtml(item.name)}</h4><p>${escapeHtml([item.size, item.color].filter(Boolean).join(' · '))}</p><p>Количество: ${item.quantity}</p><strong>${money(item.price * item.quantity)}</strong></div>
+    <div><h4>${escapeHtml(item.name)}</h4>${item.size ? `<p>Рост: ${escapeHtml(item.size)}</p>` : ''}<p>Количество: ${item.quantity}</p><strong>${money(item.price * item.quantity)}</strong></div>
     <button class="cart-remove" type="button" data-remove-index="${index}" aria-label="Удалить">×</button>
   </div>`).join('');
 }
@@ -227,7 +251,7 @@ async function submitOrder(event) {
       body: JSON.stringify({
         customer: { name: form.get('name'), phone: form.get('phone'), address: form.get('address'), comment: form.get('comment') },
         website: form.get('website'),
-        items: state.cart.map(({ productId, quantity, size, color }) => ({ productId, quantity, size, color }))
+        items: state.cart.map(({ productId, quantity, size }) => ({ productId, quantity, size }))
       })
     });
     const data = await response.json();
@@ -271,14 +295,16 @@ function bindEvents() {
   document.querySelector('#qtyMinus').addEventListener('click', () => { state.quantity = Math.max(1, state.quantity - 1); elements.qtyValue.textContent = state.quantity; });
   document.querySelector('#qtyPlus').addEventListener('click', () => { state.quantity = Math.min(20, state.quantity + 1); elements.qtyValue.textContent = state.quantity; });
   elements.productModal.addEventListener('click', (event) => {
-    const option = event.target.closest('[data-option-type]');
+    const option = event.target.closest('[data-size-value]');
     if (!option) return;
-    if (option.dataset.optionType === 'size') state.selectedSize = option.dataset.optionValue;
-    else state.selectedColor = option.dataset.optionValue;
-    if (state.activeProduct) {
-      renderOptions(elements.sizeGroup, 'Размер', state.activeProduct.sizes || [], 'size');
-      renderOptions(elements.colorGroup, 'Цвет', state.activeProduct.colors || [], 'color');
-    }
+    state.selectedSize = option.dataset.sizeValue;
+    if (state.activeProduct) renderOptions(elements.sizeGroup, 'Рост, см', state.activeProduct.sizes || []);
+  });
+  elements.modalImage.addEventListener('click', (event) => {
+    const thumbnail = event.target.closest('[data-gallery-index]');
+    if (!thumbnail || !state.activeProduct) return;
+    state.activeImageIndex = Number(thumbnail.dataset.galleryIndex) || 0;
+    renderProductGallery(state.activeProduct);
   });
   elements.addToCart.addEventListener('click', addActiveToCart);
   document.querySelector('#openCart').addEventListener('click', openCart);
@@ -310,8 +336,23 @@ function observeReveal() {
 }
 
 function money(value) { return `${Number(value || 0).toLocaleString('ru-RU')} ${state.settings.currency || 'сом'}`; }
-function cartKey(item) { return `${item.productId}|${item.size}|${item.color}`; }
-function loadCart() { try { const value = JSON.parse(localStorage.getItem('ailuu-cart') || '[]'); return Array.isArray(value) ? value : []; } catch { return []; } }
+function cartKey(item) { return `${item.productId}|${item.size}`; }
+function loadCart() {
+  try {
+    const value = JSON.parse(localStorage.getItem('ailuu-cart') || '[]');
+    if (!Array.isArray(value)) return [];
+    return value.filter((item) => item && item.productId).map((item) => ({
+      productId: item.productId,
+      name: item.name,
+      price: Number(item.price || 0),
+      image: item.image || '',
+      size: item.size || '',
+      quantity: Math.max(1, Math.min(20, Number(item.quantity) || 1))
+    }));
+  } catch {
+    return [];
+  }
+}
 function persistCart() { localStorage.setItem('ailuu-cart', JSON.stringify(state.cart)); }
 function setText(node, value) { if (node && value) node.textContent = value; }
 function sanitizePhone(value) { return String(value || '').replace(/\D/g, ''); }

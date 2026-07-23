@@ -36,6 +36,9 @@ function mapSettings(row = {}) {
 
 function mapProduct(row) {
   if (!row) return null;
+  const images = Array.isArray(row.image_urls) && row.image_urls.length
+    ? row.image_urls.filter(Boolean)
+    : (row.image_url ? [row.image_url] : []);
   return {
     id: row.id,
     name: row.name,
@@ -44,8 +47,8 @@ function mapProduct(row) {
     category: row.category,
     description: row.description,
     sizes: row.sizes || [],
-    colors: row.colors || [],
-    image: row.image_url || '',
+    images,
+    image: images[0] || '',
     isActive: row.is_active,
     inStock: row.is_active && (row.stock_quantity === null || row.stock_quantity > 0),
     featured: row.featured,
@@ -73,7 +76,6 @@ function mapOrder(row, items = []) {
       price: item.unit_price,
       quantity: item.quantity,
       size: item.selected_size,
-      color: item.selected_color,
       lineTotal: item.line_total
     })),
     total: row.total,
@@ -133,13 +135,13 @@ async function addProduct(input, actor = { type: 'system', id: '' }) {
   return transaction(async (client) => {
     const result = await client.query(`
       INSERT INTO products (
-        id, name, price, old_price, category, description, sizes, colors, image_url,
+        id, name, price, old_price, category, description, sizes, image_url, image_urls,
         is_active, featured, stock_quantity, sort_order
       ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)
       RETURNING *
     `, [
       id, product.name, product.price, product.oldPrice, product.category || 'Коллекция',
-      product.description, product.sizes, product.colors, product.image,
+      product.description, product.sizes, product.image, product.images,
       product.inStock, product.featured, product.stockQuantity, product.sortOrder
     ]);
     await writeAudit(client, actor, 'product.created', 'product', id, { name: product.name });
@@ -160,8 +162,7 @@ async function updateProduct(id, patch, actor = { type: 'system', id: '' }) {
       category: patch.category ?? current.category,
       description: patch.description ?? current.description,
       sizes: patch.sizes ?? current.sizes,
-      colors: patch.colors ?? current.colors,
-      image: patch.image ?? current.image,
+      images: patch.images ?? (patch.image === undefined ? current.images : (patch.image ? [patch.image] : [])),
       inStock: patch.inStock ?? current.isActive,
       featured: patch.featured ?? current.featured,
       stockQuantity: patch.stockQuantity === undefined ? current.stockQuantity : patch.stockQuantity,
@@ -170,12 +171,13 @@ async function updateProduct(id, patch, actor = { type: 'system', id: '' }) {
 
     const result = await client.query(`
       UPDATE products SET
-        name=$2, price=$3, old_price=$4, category=$5, description=$6, sizes=$7, colors=$8,
-        image_url=$9, is_active=$10, featured=$11, stock_quantity=$12, sort_order=$13
+        name=$2, price=$3, old_price=$4, category=$5, description=$6, sizes=$7,
+        image_url=$8, image_urls=$9, colors='{}'::text[], is_active=$10, featured=$11,
+        stock_quantity=$12, sort_order=$13
       WHERE id=$1 RETURNING *
     `, [
       id, merged.name, merged.price, merged.oldPrice, merged.category, merged.description,
-      merged.sizes, merged.colors, merged.image, merged.inStock, merged.featured,
+      merged.sizes, merged.image, merged.images, merged.inStock, merged.featured,
       merged.stockQuantity, merged.sortOrder
     ]);
     await writeAudit(client, actor, 'product.updated', 'product', id, { fields: Object.keys(patch) });
@@ -232,7 +234,7 @@ async function createOrder(rawInput) {
   return transaction(async (client) => {
     const idempotencyPayload = {
       customer: input.customer,
-      items: [...input.items].sort((a, b) => `${a.productId}|${a.size}|${a.color}`.localeCompare(`${b.productId}|${b.size}|${b.color}`))
+      items: [...input.items].sort((a, b) => `${a.productId}|${a.size}`.localeCompare(`${b.productId}|${b.size}`))
     };
     const timeBucket = Math.floor(Date.now() / (10 * 60 * 1000));
     const idempotencyKey = crypto.createHash('sha256')
@@ -281,14 +283,10 @@ async function createOrder(rawInput) {
       if (product.sizes.length && (!item.size || !product.sizes.includes(item.size))) {
         throw new Error(`Выберите доступный размер товара «${product.name}».`);
       }
-      if (product.colors.length && (!item.color || !product.colors.includes(item.color))) {
-        throw new Error(`Выберите доступный цвет товара «${product.name}».`);
-      }
       return {
         product,
         quantity: item.quantity,
         size: item.size,
-        color: item.color,
         lineTotal: product.price * item.quantity
       };
     });
@@ -313,10 +311,10 @@ async function createOrder(rawInput) {
         INSERT INTO order_items (
           order_id, product_id, product_name, unit_price, quantity,
           selected_size, selected_color, line_total
-        ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
+        ) VALUES ($1,$2,$3,$4,$5,$6,'',$7)
       `, [
         orderId, item.product.id, item.product.name, item.product.price, item.quantity,
-        item.size, item.color, item.lineTotal
+        item.size, item.lineTotal
       ]);
       if (item.product.stock_quantity !== null) {
         await client.query('UPDATE products SET stock_quantity = stock_quantity - $2 WHERE id = $1', [item.product.id, item.quantity]);
@@ -332,7 +330,7 @@ async function createOrder(rawInput) {
       unit_price: item.product.price,
       quantity: item.quantity,
       selected_size: item.size,
-      selected_color: item.color,
+      selected_color: '',
       line_total: item.lineTotal
     })));
   });

@@ -15,7 +15,7 @@ async function main() {
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify({
       customer: { name: 'CI Smoke Test', phone: '+996000000000', address: 'CI' },
-      items: [{ productId: product.id, quantity: 1, size: product.sizes?.[0] || '', color: product.colors?.[0] || '' }]
+      items: [{ productId: product.id, quantity: 1, size: product.sizes?.[0] || '' }]
     })
   });
   if (!orderResponse.ok) throw new Error(`Order failed: ${orderResponse.status} ${await orderResponse.text()}`);

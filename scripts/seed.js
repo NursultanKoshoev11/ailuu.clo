@@ -30,8 +30,7 @@ async function seed() {
           category: product.category,
           description: product.description,
           sizes: product.sizes,
-          colors: product.colors,
-          image: product.image || '',
+          images: product.images || [],
           inStock: product.inStock !== false,
           featured: Boolean(product.featured),
           stockQuantity: null

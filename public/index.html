@@ -7,7 +7,7 @@
   <meta name="description" content="AILUU.CLO — современная скромная женская одежда.">
   <title>AILUU.CLO — одежда с достоинством</title>
   <link rel="icon" href="/logo.svg" type="image/svg+xml">
-  <link rel="stylesheet" href="/styles.css">
+  <link rel="stylesheet" href="/styles.css?v=gallery-1">
 </head>
 <body>
   <div class="announcement" id="announcement">Доставка по Бишкеку и регионам Кыргызстана</div>
@@ -33,7 +33,7 @@
       <div class="hero-copy reveal">
         <p class="eyebrow" id="eyebrow">Скромность в каждой детали</p>
         <h1 id="headline">Одежда, в которой спокойно быть собой</h1>
-        <p class="hero-text" id="subheadline">Лаконичные образы для женщин, выбирающих элегантность, комфорт и сдержанность.</p>
+        <p class="hero-text" id="subheadline">Лаконичные образы для девочек, выбирающих элегантность, комфорт и сдержанность.</p>
         <div class="hero-actions">
           <a class="button button-primary" href="#catalog">Смотреть коллекцию</a>
           <a class="text-link" id="instagramLink" href="https://www.instagram.com/ailuu.clo/" target="_blank" rel="noreferrer">Instagram ↗</a>
@@ -53,7 +53,7 @@
 
     <section class="benefits" aria-label="Преимущества">
       <article><span>01</span><div><strong>Закрытый крой</strong><p>Продуманные свободные силуэты</p></div></article>
-      <article><span>02</span><div><strong>Спокойная палитра</strong><p>Цвета, которые легко сочетать</p></div></article>
+      <article><span>02</span><div><strong>Удобная посадка</strong><p>Размеры по росту в сантиметрах</p></div></article>
       <article><span>03</span><div><strong>Личный сервис</strong><p>Поможем с размером и образом</p></div></article>
     </section>
 
@@ -63,7 +63,6 @@
           <p class="eyebrow">Выберите свой образ</p>
           <h2>Коллекция AILUU</h2>
         </div>
-        <p>Актуальное наличие обновляется владельцем магазина через Telegram.</p>
       </div>
       <div class="filters" id="filters" aria-label="Фильтры каталога"></div>
       <div class="product-grid" id="productGrid" aria-live="polite"></div>
@@ -98,7 +97,7 @@
         <p class="eyebrow">Как заказать</p>
         <h2>Три простых шага</h2>
         <ol>
-          <li><span>1</span><div><strong>Добавьте товары</strong><p>Выберите цвет, размер и количество.</p></div></li>
+          <li><span>1</span><div><strong>Добавьте товары</strong><p>Выберите рост и количество.</p></div></li>
           <li><span>2</span><div><strong>Оставьте контакты</strong><p>Мы получим заказ в Telegram и свяжемся с вами.</p></div></li>
           <li><span>3</span><div><strong>Подтвердите доставку</strong><p id="deliveryText">Доставка рассчитывается после подтверждения заказа.</p></div></li>
         </ol>
@@ -106,7 +105,7 @@
       <div class="delivery-note reveal">
         <div class="geometric-mark">✦</div>
         <h3>Нужна помощь с выбором?</h3>
-        <p>Напишите нам — подскажем размер, оттенок и подходящее сочетание.</p>
+        <p>Напишите нам — подскажем подходящий размер и сочетание.</p>
         <div class="contact-actions" id="contactActions"></div>
       </div>
     </section>
@@ -129,7 +128,6 @@
         <div class="modal-price" id="modalPrice"></div>
         <p id="modalDescription"></p>
         <div class="option-group" id="sizeGroup"></div>
-        <div class="option-group" id="colorGroup"></div>
         <div class="quantity-row">
           <span>Количество</span>
           <div class="quantity-control"><button type="button" id="qtyMinus">−</button><span id="qtyValue">1</span><button type="button" id="qtyPlus">+</button></div>
@@ -170,6 +168,6 @@
   </div>
 
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
-  <script src="/app.js" defer></script>
+  <script src="/app.js?v=gallery-1" defer></script>
 </body>
 </html>

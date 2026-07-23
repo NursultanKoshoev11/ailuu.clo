@@ -9,12 +9,21 @@ const { healthcheck } = require('./db');
 const { createOrder, getPublicCatalog } = require('./repository');
 
 async function buildApp({ telegram }) {
+  const isHttpsPublicUrl = config.PUBLIC_BASE_URL.startsWith('https://');
   const app = Fastify({
     logger: { level: config.LOG_LEVEL },
     trustProxy: config.TRUST_PROXY,
     bodyLimit: 256 * 1024,
     requestIdHeader: 'x-request-id',
     genReqId: () => cryptoRandomId()
+  });
+
+  app.addHook('onSend', async (request, reply, payload) => {
+    const pathname = request.url.split('?', 1)[0];
+    if (pathname === '/' || pathname === '/index.html') {
+      reply.header('Cache-Control', 'no-cache');
+    }
+    return payload;
   });
 
   await app.register(helmet, {
@@ -28,9 +37,11 @@ async function buildApp({ telegram }) {
         fontSrc: ["'self'"],
         frameAncestors: ["'none'"],
         baseUri: ["'self'"],
-        formAction: ["'self'"]
+        formAction: ["'self'"],
+        upgradeInsecureRequests: isHttpsPublicUrl ? [] : null
       }
     },
+    ...(isHttpsPublicUrl ? {} : { strictTransportSecurity: false }),
     crossOriginResourcePolicy: { policy: 'same-site' },
     referrerPolicy: { policy: 'strict-origin-when-cross-origin' }
   });
@@ -46,7 +57,12 @@ async function buildApp({ telegram }) {
     decorateReply: true,
     cacheControl: true,
     maxAge: config.isProduction ? '1h' : 0,
-    immutable: false
+    immutable: false,
+    setHeaders(response, filePath) {
+      if (!isHttpsPublicUrl || filePath.endsWith('index.html')) {
+        response.setHeader('Cache-Control', 'no-cache');
+      }
+    }
   });
 
   await app.register(fastifyStatic, {
@@ -107,8 +123,7 @@ async function buildApp({ telegram }) {
               properties: {
                 productId: { type: 'string', format: 'uuid' },
                 quantity: { type: 'integer', minimum: 1, maximum: 20 },
-                size: { type: 'string', maxLength: 80 },
-                color: { type: 'string', maxLength: 80 }
+                size: { type: 'string', maxLength: 80 }
               }
             }
           }
@@ -148,7 +163,7 @@ async function buildApp({ telegram }) {
     if (error.statusCode === 429) {
       return reply.code(429).send({ error: 'Слишком много запросов. Попробуйте позже.' });
     }
-    if (error.message && /товар|корзин|имя|телефон|размер|цвет|склад|заказ|обрабатывается|недостаточно/i.test(error.message)) {
+    if (error.message && /товар|корзин|имя|телефон|размер|склад|заказ|обрабатывается|недостаточно/i.test(error.message)) {
       return reply.code(400).send({ error: error.message });
     }
     return reply.code(500).send({ error: 'Внутренняя ошибка сервера.' });
