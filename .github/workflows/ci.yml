@@ -2,7 +2,7 @@ name: CI
 
 on:
   push:
-    branches: [main, production-ready]
+    branches: [main, production-ready, lockfile-hardening]
   pull_request:
 
 permissions:
@@ -44,6 +44,12 @@ jobs:
         with:
           node-version: 22
       - run: npm install --ignore-scripts --no-audit --no-fund
+      - name: Upload generated lockfile
+        uses: actions/upload-artifact@v4
+        with:
+          name: npm-lockfile
+          path: package-lock.json
+          retention-days: 1
       - run: npm run check
       - run: npm test
       - run: npm run migrate
